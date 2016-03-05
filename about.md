@@ -7,7 +7,7 @@ permalink: /about/
 I'm a software engineer living in Berlin.
 
 After my B.Sc. and M.Sc. in computer science
-I began working for a satellite software company called [Amphinicy](http://www.amphinicy.com/).
+I began working for a software company called [Amphinicy](http://www.amphinicy.com/).
 There I had a great time writing programs that orchestrate communication between earth stations 
 and satellites in earth's orbit.
 
