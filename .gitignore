@@ -3,3 +3,6 @@ _drafts
 .sass-cache
 .jekyll-metadata
 *.swp
+
+serve
+feed.xml
