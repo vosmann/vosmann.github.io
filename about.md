@@ -15,7 +15,7 @@ After a while of beaming radio waves into space with Java, I moved to Berlin and
 started a new job with [Zalando](http://jobs.zalando.de/en/welcome-zalando), Europe's biggest
 fashion retailer and platform. At Zalando I'm part of a team (originally tiny, now bigger)
 dedicated to applying machine learning to help customers discover the products and brands
-they like best instead of having customers browse through overwhelming catalogues.
+they like instead of having them browse through overwhelming catalogues.
 
 At Zalando I reconnected with machine learning in an engineering-heavy role and have become 
 absorbed by building resilient systems that serve tens of thousands of recommendations per second,
