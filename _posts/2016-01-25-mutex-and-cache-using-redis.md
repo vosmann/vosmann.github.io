@@ -23,27 +23,28 @@ A request retrieves two URLs:
 ### Simultaneous requests and list caching
 <!-- One will however be the first to reach the lock. -->
 
-All the positions' requests are made _simultaneously_. The first arriving request should perform
+All the positions' requests are made _simultaneously_. The request arriving first should perform
 the calculation and cache the five-item list. The item list is calculated once and cached for two reasons.
-The first one because the calculation is expensive and the second are duplicates (explained below).
-This same list should then be used by the remaining four requests.
+The first one is that the calculation is expensive and the second one is the possibility of duplicates
+(explained below).
+After it's cached, the same list should be used by the remaining four requests.
 A request for the item at position p will get the whole list and will just use the element at position p.
-It's even possible that a client decides to take only the first three items, and disregards two.
+It's even possible that a client decides to take only the first three items and disregards the last two.
 
 #### Fear of duplicates
 
 The list could be recalculated on every request, but this is something we'd avoid because
-the calculation is expensive. Furthermore, it can lead to duplicates being shown like in the picture below.
+the calculation is expensive. Furthermore, it can lead to duplicates being shown.
 
 ![Duplicates are possible](/images/mutex-and-cache-with-redis/duplicates.png)
 
-Duplicates are possible because the calculation can return different item lists if run in different points in time.
+Duplicates are possible because the calculation can return different item lists if run at different points in time.
 This happens because items become available or unavailable in real time.
 In other words, an item in position 1 in the list can appear at position 2 if the list is recalculated a bit later.
 
 ### Server is horizonally scaled
 
-The requests coming at the same moment from an items display first hit load balancer.
+The requests coming at the same moment from an items display first hit a load balancer.
 Since there are many clients making requests to the server, the server is horizontally scaled and sits behind
 a load balancer.
 If we don't intervene and the requests are left to be distributed by the LB, our caching scheme will not work.
