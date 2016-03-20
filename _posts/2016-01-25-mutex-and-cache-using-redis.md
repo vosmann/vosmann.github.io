@@ -8,51 +8,52 @@ categories: mutex caching redis distributed-systems
 ## Motivation
 
 There is a client that needs to display five items to the user. The client renders them using HTML.
-Will will call this event _items display_. The items being displayed belong to a list. All five items 
+We will call this event _items display_. The items being displayed belong to a list. All five items 
 of the list are calculated in one go on the server, and the items are all distinct: each one has
 a different image and clicking each one should lead to a different web page.
 
 Therefore, a separate HTTP request is made in order to display an item on position p of the list.
-This request retrieves two URLs:
+A request retrieves two URLs:
 
 * the image URL (image available on a CDN) and
 * the link destination URL.
 
 ![Items being shown on the client](/images/mutex-and-cache-with-redis/requests-and-item-list.png)
 
-The catch is that the item list must be calculated only once. The first arriving request should perform
-the calculation and cache the five-item list. This same list should then be used by the remaining four requests.
-A request for the item at position p will get the list and will just use the element at position p.
-It's even possible that a client decides to take only the first three items, and disregard two.
+### Simultaneous requests and list caching
+<!-- One will however be the first to reach the lock. -->
 
-The list could be recalculated on every request, but this is something we'd  like to avoid because
-the calculation is expensive and may lead to duplicates being shown on the client. This is because the calculation
-may return different sets if run in different points in time, even if the parameters were the same every time.
-In other words, an item on position 1 in the list can appear at position 3 if the list is recalculated a bit later.
+All the positions' requests are made _simultaneously_. The first arriving request should perform
+the calculation and cache the five-item list. The item list is calculated once and cached for two reasons.
+The first one because the calculation is expensive and the second are duplicates (explained below).
+This same list should then be used by the remaining four requests.
+A request for the item at position p will get the whole list and will just use the element at position p.
+It's even possible that a client decides to take only the first three items, and disregards two.
 
-## A more formal problem definition
+#### Fear of duplicates
 
-N requests are simultaneously made to server. In the examples we will work with N=5. There are multiple clients making
-requests to the server. At a certain moment a client will make N requests with the same parameters. Only the
-item position will differ between these N requests.
+The list could be recalculated on every request, but this is something we'd avoid because
+the calculation is expensive. Furthermore, it can lead to duplicates being shown like in the picture below.
 
-Formally speaking, when a client wants to do an items display list, it maps the params of this list to a set of
-N requests of the form (params, position):
- <!-- &isin; -->
+![Duplicates are possible](/images/mutex-and-cache-with-redis/duplicates.png)
 
-    item_display(params) = {request(params, position) | position=0,1,...N-1}
+Duplicates are possible because the calculation can return different item lists if run in different points in time.
+This happens because items become available or unavailable in real time.
+In other words, an item in position 1 in the list can appear at position 2 if the list is recalculated a bit later.
 
-The server is horizontally scaled and sits behind a load balancer.
+### Server is horizonally scaled
+
+The requests coming at the same moment from an items display first hit load balancer.
+Since there are many clients making requests to the server, the server is horizontally scaled and sits behind
+a load balancer.
+If we don't intervene and the requests are left to be distributed by the LB, our caching scheme will not work.
 
 ![Horizontally scaled servers](/images/mutex-and-cache-with-redis/horizontally-scaled-servers.png)
 
-Each request corresponds to a position p in a list. The order in which the requests are received by the servers is unknown. Some requests might even come very late. Also a single server might serve zero or more requests coming 
-from the same client.
-
-The list must be calculated only once and by the server that happens to receive the first request.
-The list should then be cached for the remaining requests.
-
-Each request will ultimately get a list, extract the element at position p and return it to the client.
+At a certain moment a client will make five requests with the same parameters. Only the
+item position will differ between these five requests. Each request gets the list, extracts the element
+at position p and returns it to the client.
+The order in which the requests are received by the servers is unknown. Some requests might even come very late.
 
 ## Load balancer stickyness solution
 
@@ -116,34 +117,37 @@ The keys are generated with a rule similar to:
 
 A request thread will attempt to get a lock by setting an arbitrary value into `lock_key(params)` by  doing a 
 
-    hsetnx lock_key(params) "lock" "got it"
-    expire lock_key(params) lock_ttl
+    HSETNX lock_key(params) "lock" "got it"
+    EXPIRE lock_key(params) lock_ttl
 
-The [hsetnx](http://redis.io/commands/hsetnx) commands writes a field "lock" with the value "got it" to the key,
+The [HSETNX](http://redis.io/commands/hsetnx) commands writes a field "lock" with the value "got it" to the key,
 and returns 1 only if the the field there did not already exist. Basically, just the first write gets a 1 and any
 subsequent ones get a 0. This covers the decision on who will calculate the list.
 
 After the lock-winning thread is done with the calculation, it will write the item list with the command:
 
-    lpush list_key(param) list_json
-    expire list_key(params) list_ttl
+    LPUSH list_key(param) list_json
+    EXPIRE list_key(params) list_ttl
 
 The non-lock-winning threads carry on and try to execute a blocking read on the list,
 but it is not yet there, so they wait. Since there are multiple requests trying to read, we cannot use
 the typical Redis pop commands, as that would mean the first thread would remove the list and the remaining threads
 would fail with a timeout. Instead we keep the item list in a one-element circular list using
-[brpoplpush](http://redis.io/commands/brpoplpush). Every thread reads the list with the following command:
+[BRPOPLPUSH](http://redis.io/commands/brpoplpush). Every thread reads the list with the following command:
 
-    list_json = brpoplpush list_key(param) list_key(param)
-    expire list_key(params) list_ttl
+    list_json = BRPOPLPUSH list_key(param) list_key(param)
+    EXPIRE list_key(params) list_ttl
 
 Both the lock and list entries have their expiry times explicitly set, with lock_ttl < list_ttl, in order to
 satisfy the second design assumption listed in the section above.
 
 ### Conclusion
 
-This algoritm hasn't yet been extensively tested in real production conditions. I'll try to report on these as soon
-as possible. Issues might still arise. For example, the Redis cache could become too small if the traffic increases
+The algoritm has been tested locally with a small number of requests competing for the Redis lock and data. 
+More extensive tests in real production conditions are to follow. I will report on these as soon
+as they are available.
+
+Some issues may arise with this approach. For example, the Redis cache could become too small if the traffic increases
 sufficiently. This could lead to items display not being able to create a single lock or to write a list. 
 
 Additionally, Redis operations could time out and result in either a single item not being shown or none of them 
