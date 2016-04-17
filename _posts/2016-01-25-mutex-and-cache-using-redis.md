@@ -21,7 +21,6 @@ A request retrieves two URLs:
 ![Items being shown on the client](/images/mutex-and-cache-with-redis/requests-and-item-list.png)
 
 ### Simultaneous requests and list caching
-<!-- One will however be the first to reach the lock. -->
 
 All the positions' requests are made _simultaneously_. The request arriving first should perform
 the calculation and cache the five-item list. The item list is calculated once and cached for two reasons.
