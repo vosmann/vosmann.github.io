@@ -3,6 +3,8 @@ _drafts
 .sass-cache
 .jekyll-metadata
 *.swp
+*.backup
 
 serve
 feed.xml
+Gemfile.lock
