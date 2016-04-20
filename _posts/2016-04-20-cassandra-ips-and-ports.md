@@ -10,7 +10,7 @@ categories:
 clients using CQL: broadcast address + 9042
 clients using Thrift: broadcast address + 9160
 
-internode communication (replication, streaming): ??? + 7000
+internode communication (replication, streaming): BROADCAST_ADDRESS (!)(?) + 7000
 internode communication (replication, streaming) with enabled encryption: ??? + 7001
 
 port OpsCenter opens to listen for Datastax Agents sending metrics: 61620
